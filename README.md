@@ -21,7 +21,7 @@ This project is a web scraper designed to extract and process KCET (Karnataka Co
 
 1. Clone the repository:
     ```sh
-    git clone https://github.com/yourusername/kcet-scraper.git
+    git clone https://github.com/CubeStar1/KCET-Scraper-Script.git
     cd KCET-Scraper-Script
     ```
 
