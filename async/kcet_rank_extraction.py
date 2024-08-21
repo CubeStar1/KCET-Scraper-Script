@@ -9,8 +9,8 @@ from roll_no_generator import generate_roll_no_list
 
 # Constants
 KCET_RESULTS_URL = "https://keaonline.karnataka.gov.in/UGCET_RESULT_2024/main/results.php" # URL to scrape
-NUM_BROWSER_TABS = 100 # Number of browser tabs to open
-OPEN_BROWSER = True # Set this to false if you want to run it headless without opening browser, by default it is set to False
+NUM_BROWSER_TABS = 50 # Number of browser tabs to open
+OPEN_BROWSER = False # Set this to false if you want to run it headless without opening browser, by default it is set to False
 BASE_PATH = Path("../KCET/2024")
 HTML_FILE_PATH = BASE_PATH / "raw_html/final_html_test.xlsx"
 RANK_FILE_PATH = BASE_PATH / "raw_results/results_test.xlsx" # Path to save the results
@@ -41,11 +41,11 @@ async def fetch_student_details(context, roll_no, status_dict):
 
     for _ in range(max_retries):
         try:
-            await page.goto(KCET_RESULTS_URL, timeout=100000)
+            await page.goto(KCET_RESULTS_URL, timeout=1000000)
             await page.fill("#txtrollno", roll_no)
             await page.get_by_role("button", name="Submit").click()
             await page.wait_for_load_state()
-            await page.wait_for_timeout(100)
+            await page.wait_for_timeout(300)
             break
         except Exception as e:
             print(f"Retry for {roll_no}: {str(e)}")
@@ -70,7 +70,7 @@ async def fetch_student_details(context, roll_no, status_dict):
         else:
             status_dict[roll_no] = "Unexpected content"
     except Exception as e:
-        status_dict[roll_no] = f"Error: {str(e)}"
+        status_dict[roll_no] = f"Unexpected Error"
 
     await page.close()
     return None
@@ -107,8 +107,8 @@ def parse_results(results, data, rank_template):
                 if element in rank:
                     rank[element] = value
             data.loc[len(data.index)] = rank
-    except:
-        print("Error parsing results")
+    except Exception as e:
+        print("Error parsing results: ", e)
 
 
 def process_results(results_df, cutoff_rank):
@@ -118,7 +118,11 @@ def process_results(results_df, cutoff_rank):
         engineering_df = results_df.loc[results_df['Rank :'].str.contains("Engineering", regex=True, na=False)]
         engineering_df[["Stream", "Rank"]] = engineering_df['Rank :'].str.split('-', expand=True)
         engineering_df['Rank'] = engineering_df['Rank'].str.strip(",").str.strip()
-        engineering_df[["ActualRank", "Code"]] = engineering_df['Rank'].str.split('G', expand=True)
+        if engineering_df['Rank'].str.contains('G', na=False).any():
+            engineering_df[["ActualRank", "Code"]] = engineering_df['Rank'].str.split('G', expand=True)
+        else:
+            engineering_df['ActualRank'] = engineering_df['Rank']
+            engineering_df['Code'] = ""
         engineering_df[["Course Name", "Course Code", "Course Fee"]] = engineering_df['Course allotted:'].apply(
             extract_course_info)
         engineering_df['ActualRank'] = pd.to_numeric(engineering_df['ActualRank'])
@@ -134,8 +138,8 @@ def process_results(results_df, cutoff_rank):
         engineering_df.to_excel(PROCESSED_RESULTS_FILE_PATH, index=False)
         required_df.to_excel(PROCESSED_RESULTS_CUTOFF_FILE_PATH, index=False)
         return engineering_df, required_df
-    except:
-        print("Error processing results")
+    except Exception as e:
+        print("Error processing results: ", e)
 
 def process_status(stat_df):
     required_stat_df = stat_df.loc[
@@ -167,6 +171,7 @@ def main_script():
                 df = pd.read_excel(file_path, engine='openpyxl')
             else:
                 df_status = pd.read_excel(file_path, engine='openpyxl')
+                df_status = df_status.drop_duplicates(subset=["CET No"])
         else:
             file_path.parent.mkdir(parents=True, exist_ok=True)
             pd.DataFrame().to_excel(file_path, index=False)
