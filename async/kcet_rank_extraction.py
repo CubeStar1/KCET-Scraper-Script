@@ -5,13 +5,14 @@ import pandas as pd
 import re
 from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
-from roll_no_generator import generate_roll_no_list
+from roll_no_generator import generate_roll_no_list, get_roll_no_list_from_file
 
 # Constants
-KCET_RESULTS_URL = "https://keaonline.karnataka.gov.in/UGCET_RESULT_2024/main/results.php" # URL to scrape
+KCET_RESULTS_URL = "https://keaonline.karnataka.gov.in/ugmock_result_2024_r2/main/results.php" # URL to scrape
 NUM_BROWSER_TABS = 50 # Number of browser tabs to open
 OPEN_BROWSER = False # Set this to false if you want to run it headless without opening browser, by default it is set to False
-BASE_PATH = Path("../KCET/2024")
+BASE_PATH = Path("../KCET/2024/mock-2")
+INPUT_FILE_PATH = BASE_PATH / "kcet_A_Z_valid.xlsx"
 HTML_FILE_PATH = BASE_PATH / "raw_html/final_html_test.xlsx"
 RANK_FILE_PATH = BASE_PATH / "raw_results/results_test.xlsx" # Path to save the results
 STATUS_FILE_PATH = BASE_PATH / "raw_status/status_test.xlsx"
@@ -103,7 +104,8 @@ def parse_results(results, data, rank_template):
                 tds = row.find_all('td')
                 if len(tds) < 2:
                     break
-                element, value = tds[0].text.strip(), tds[1].text.strip()
+                element = ' '.join(tds[0].text.replace("\n", "").strip().split())
+                value = ' '.join(tds[1].text.replace("\n", "").strip().split())
                 if element in rank:
                     rank[element] = value
             data.loc[len(data.index)] = rank
@@ -115,7 +117,9 @@ def process_results(results_df, cutoff_rank):
     try:
 
         results_df.dropna(inplace=True)
-        engineering_df = results_df.loc[results_df['Rank :'].str.contains("Engineering", regex=True, na=False)]
+        # engineering_df = results_df.loc[results_df['Rank :'].str.contains("Engineering", regex=True, na=False)]
+        engineering_df = results_df.loc[results_df['Rank :'].str.contains("Medical", regex=True, na=False)]
+
         engineering_df[["Stream", "Rank"]] = engineering_df['Rank :'].str.split('-', expand=True)
         engineering_df['Rank'] = engineering_df['Rank'].str.strip(",").str.strip()
         if engineering_df['Rank'].str.contains('G', na=False).any():
@@ -154,6 +158,8 @@ def main_script():
         "Name of the Candidate:": "",
         "Verified Category :": "",
         "Rank :": "",
+        "Discipline :": "",
+        "College allotted :": "",
         "Category allotted :": "",
         "Course allotted:": "",
         "Serial Number of the Allotted Option:": ""
@@ -182,7 +188,10 @@ def main_script():
 
     # Generates batches of roll numbers, each batch containing 50 roll numbers
     # In this case, its generates roll numbers starting from AA001 to AZ999
-    roll_no_batches = generate_roll_no_list("A", "A", NUM_BROWSER_TABS)
+    # roll_no_batches = generate_roll_no_list("A", "A", NUM_BROWSER_TABS)
+
+    # Generates batches of roll numbers from a file
+    roll_no_batches = get_roll_no_list_from_file(INPUT_FILE_PATH, "CET No", 50)
     status_dict = {}
 
     start_time = time.time()
@@ -200,6 +209,7 @@ def main_script():
 
         new_status_df = pd.DataFrame({"CET No": status_dict.keys(), "Reason": status_dict.values()})
         df_status = pd.concat([df_status, new_status_df], ignore_index=True)
+        df_status.drop_duplicates(subset=["CET No"], inplace=True)
         df_status.to_excel(STATUS_FILE_PATH, index=False)
 
         print(f"Batch {batch_number+1} completed. Elapsed time: {time.time() - start_time:.2f} seconds")
