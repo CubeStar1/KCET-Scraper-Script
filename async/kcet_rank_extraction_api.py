@@ -20,6 +20,8 @@ PROCESSED_RESULTS_FILE_PATH = BASE_PATH / "processed_results/processed_results.x
 PROCESSED_STATUS_FILE_PATH = BASE_PATH / "processed_results/processed_status.xlsx"
 PROCESSED_RESULTS_CUTOFF_FILE_PATH = BASE_PATH / "processed_results/processed_results_cutoff.xlsx"
 
+PROXY_URL = "http://13.81.217.201:8080"
+
 
 def extract_course_info(course_string):
     pattern = r'(.*?)\s+([A-Z]\d+[A-Z]+)\s*(\(\s*Rs\.[^)]*\))?'
@@ -50,7 +52,6 @@ async def fetch_student_details(session, roll_no, status_dict):
 
                 # Check for the congratulations message
                 congrats_table = soup.find('table', {'width': '70%', 'border': '1', 'align': 'center'})
-                print(congrats_table)
                 if congrats_table and "CONGRATULATIONS" in congrats_table.text:
                     status_dict[roll_no] = "Seat allotted"
                     # Find the table with the student details
@@ -72,7 +73,11 @@ async def fetch_student_details(session, roll_no, status_dict):
 
 
 async def scrape_batch(roll_list, status_dict):
-    async with aiohttp.ClientSession() as session:
+    connector = aiohttp.TCPConnector(ssl=False)
+
+    async with aiohttp.ClientSession(connector=connector) as session:
+        # Set the proxy for all requests in this session
+        session.proxy = PROXY_URL
         tasks = [asyncio.create_task(fetch_student_details(session, roll_no, status_dict)) for roll_no in roll_list]
         return await asyncio.gather(*tasks)
 
